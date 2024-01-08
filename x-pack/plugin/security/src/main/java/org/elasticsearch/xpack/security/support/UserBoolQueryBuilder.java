@@ -8,7 +8,6 @@
 package org.elasticsearch.xpack.security.support;
 
 import org.apache.lucene.search.Query;
-import org.elasticsearch.core.Nullable;
 import org.elasticsearch.index.query.BoolQueryBuilder;
 import org.elasticsearch.index.query.ExistsQueryBuilder;
 import org.elasticsearch.index.query.IdsQueryBuilder;
@@ -22,57 +21,23 @@ import org.elasticsearch.index.query.SearchExecutionContext;
 import org.elasticsearch.index.query.TermQueryBuilder;
 import org.elasticsearch.index.query.TermsQueryBuilder;
 import org.elasticsearch.index.query.WildcardQueryBuilder;
-import org.elasticsearch.xpack.core.security.authc.Authentication;
-import org.elasticsearch.xpack.core.security.authc.AuthenticationField;
-import org.elasticsearch.xpack.security.authc.ApiKeyService;
 
 import java.io.IOException;
 
-public class SecurityIndexBoolQueryBuilder extends BoolQueryBuilder {
+public class UserBoolQueryBuilder extends BoolQueryBuilder {
     private final SecurityIndexFieldNameTranslator fieldNameTranslator;
 
-    private SecurityIndexBoolQueryBuilder(SecurityIndexFieldNameTranslator fieldNameTranslator) {
+    private UserBoolQueryBuilder(SecurityIndexFieldNameTranslator fieldNameTranslator) {
         this.fieldNameTranslator = fieldNameTranslator;
     }
 
-    public static SecurityIndexBoolQueryBuilder wrap(
-        String type,
-        QueryBuilder queryBuilder,
-        SecurityIndexFieldNameTranslator fieldNameTranslator
-    ) {
-        return wrap(type, queryBuilder, fieldNameTranslator, null);
-    }
-
-    public static SecurityIndexBoolQueryBuilder wrap(
-        String type,
-        QueryBuilder queryBuilder,
-        SecurityIndexFieldNameTranslator fieldNameTranslator,
-        @Nullable Authentication authentication
-    ) {
-        SecurityIndexBoolQueryBuilder queryBuilderWrapper = new SecurityIndexBoolQueryBuilder(fieldNameTranslator);
+    public static UserBoolQueryBuilder build(String type, QueryBuilder queryBuilder, SecurityIndexFieldNameTranslator fieldNameTranslator) {
+        UserBoolQueryBuilder queryBuilderWrapper = new UserBoolQueryBuilder(fieldNameTranslator);
         if (queryBuilder != null) {
             QueryBuilder processedQuery = doProcess(fieldNameTranslator, queryBuilder);
             queryBuilderWrapper.must(processedQuery);
         }
         queryBuilderWrapper.filter(QueryBuilders.termQuery("type", type));
-
-        if (authentication != null) {
-            if (authentication.isApiKey()) {
-                final String apiKeyId = (String) authentication.getAuthenticatingSubject()
-                    .getMetadata()
-                    .get(AuthenticationField.API_KEY_ID_KEY);
-                assert apiKeyId != null : "api key id must be present in the metadata";
-                queryBuilderWrapper.filter(QueryBuilders.idsQuery().addIds(apiKeyId));
-            } else {
-                queryBuilderWrapper.filter(
-                    QueryBuilders.termQuery("creator.principal", authentication.getEffectiveSubject().getUser().principal())
-                );
-                final String[] realms = ApiKeyService.getOwnersRealmNames(authentication);
-                final QueryBuilder realmsQuery = ApiKeyService.filterForRealmNames(realms);
-                assert realmsQuery != null;
-                queryBuilderWrapper.filter(realmsQuery);
-            }
-        }
 
         return queryBuilderWrapper;
     }
@@ -150,6 +115,8 @@ public class SecurityIndexBoolQueryBuilder extends BoolQueryBuilder {
     }
 
     boolean isIndexFieldNameAllowed(String queryFieldName) {
-        return queryFieldName.equals("type") || fieldNameTranslator.supportedIndexFieldName(queryFieldName);
+        return queryFieldName.equals("type")
+            || queryFieldName.equals("doc_type")
+            || fieldNameTranslator.supportedIndexFieldName(queryFieldName);
     }
 }

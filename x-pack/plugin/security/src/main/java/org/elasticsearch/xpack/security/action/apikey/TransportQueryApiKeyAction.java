@@ -23,32 +23,17 @@ import org.elasticsearch.xpack.core.security.action.apikey.QueryApiKeyRequest;
 import org.elasticsearch.xpack.core.security.action.apikey.QueryApiKeyResponse;
 import org.elasticsearch.xpack.core.security.authc.Authentication;
 import org.elasticsearch.xpack.security.authc.ApiKeyService;
-import org.elasticsearch.xpack.security.support.SecurityIndexBoolQueryBuilder;
-import org.elasticsearch.xpack.security.support.SecurityIndexFieldNameTranslator;
+import org.elasticsearch.xpack.security.support.ApiKeyBoolQueryBuilder;
+import org.elasticsearch.xpack.security.support.ApiKeyFieldNameTranslators;
 
 import java.util.List;
 
-import static org.elasticsearch.xpack.security.support.SecurityIndexFieldNameTranslator.exact;
-import static org.elasticsearch.xpack.security.support.SecurityIndexFieldNameTranslator.prefix;
 import static org.elasticsearch.xpack.security.support.SecuritySystemIndices.SECURITY_MAIN_ALIAS;
 
 public final class TransportQueryApiKeyAction extends HandledTransportAction<QueryApiKeyRequest, QueryApiKeyResponse> {
 
     private final ApiKeyService apiKeyService;
     private final SecurityContext securityContext;
-
-    private static final SecurityIndexFieldNameTranslator fieldNameTranslator = new SecurityIndexFieldNameTranslator(
-        List.of(
-            exact("name"),
-            exact("username", s -> "creator.principal"),
-            exact("realm_name", s -> "creator.realm"),
-            exact("creation", s -> "creation_time"),
-            exact("expiration", s -> "expiration_time"),
-            exact("invalidated", s -> "api_key_invalidated"),
-            exact("invalidation", s -> "invalidation_time"),
-            prefix("metadata.", s -> "metadata_flattened" + s.substring(8), s -> s.startsWith("metadata_flattened."))
-        )
-    );
 
     @Inject
     public TransportQueryApiKeyAction(
@@ -81,14 +66,9 @@ public final class TransportQueryApiKeyAction extends HandledTransportAction<Que
             searchSourceBuilder.size(request.getSize());
         }
 
-        final SecurityIndexBoolQueryBuilder apiKeyBoolQueryBuilder = SecurityIndexBoolQueryBuilder.wrap(
-            "api_key",
-            request.getQueryBuilder(),
-            fieldNameTranslator,
-            authentication
+        searchSourceBuilder.query(
+            ApiKeyBoolQueryBuilder.build(request.getQueryBuilder(), request.isFilterForCurrentUser() ? authentication : null)
         );
-
-        searchSourceBuilder.query(apiKeyBoolQueryBuilder);
 
         if (request.getFieldSortBuilders() != null) {
             translateFieldSortBuilders(request.getFieldSortBuilders(), searchSourceBuilder);
@@ -111,7 +91,7 @@ public final class TransportQueryApiKeyAction extends HandledTransportAction<Que
             if (FieldSortBuilder.DOC_FIELD_NAME.equals(fieldSortBuilder.getFieldName())) {
                 searchSourceBuilder.sort(fieldSortBuilder);
             } else {
-                final String translatedFieldName = fieldNameTranslator.translate(fieldSortBuilder.getFieldName());
+                final String translatedFieldName = ApiKeyFieldNameTranslators.translate(fieldSortBuilder.getFieldName());
                 if (translatedFieldName.equals(fieldSortBuilder.getFieldName())) {
                     searchSourceBuilder.sort(fieldSortBuilder);
                 } else {

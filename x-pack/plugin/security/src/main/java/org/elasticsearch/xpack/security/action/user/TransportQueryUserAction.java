@@ -22,7 +22,7 @@ import org.elasticsearch.xpack.core.security.action.user.QueryUserRequest;
 import org.elasticsearch.xpack.core.security.action.user.QueryUserResponse;
 import org.elasticsearch.xpack.core.security.authc.Authentication;
 import org.elasticsearch.xpack.security.authc.esnative.NativeUsersStore;
-import org.elasticsearch.xpack.security.support.SecurityIndexBoolQueryBuilder;
+import org.elasticsearch.xpack.security.support.UserBoolQueryBuilder;
 import org.elasticsearch.xpack.security.support.SecurityIndexFieldNameTranslator;
 
 import java.util.List;
@@ -69,11 +69,10 @@ public final class TransportQueryUserAction extends TransportAction<QueryUserReq
             searchSourceBuilder.size(request.getSize());
         }
 
-        final SecurityIndexBoolQueryBuilder userKeyBoolQueryBuilder = SecurityIndexBoolQueryBuilder.wrap(
+        final UserBoolQueryBuilder userKeyBoolQueryBuilder = UserBoolQueryBuilder.build(
             "user",
             request.getQueryBuilder(),
-            fieldNameTranslator,
-            authentication
+            fieldNameTranslator
         );
 
         searchSourceBuilder.query(userKeyBoolQueryBuilder);

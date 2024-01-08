@@ -51,7 +51,7 @@ import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 
-public class SecurityIndexBoolQueryBuilderTests extends ESTestCase {
+public class UserBoolQueryBuilderTests extends ESTestCase {
     private static final SecurityIndexFieldNameTranslator fieldNameTranslator = new SecurityIndexFieldNameTranslator(
         List.of(
             exact("name"),
@@ -68,12 +68,7 @@ public class SecurityIndexBoolQueryBuilderTests extends ESTestCase {
     public void testBuildFromSimpleQuery() {
         final Authentication authentication = randomBoolean() ? AuthenticationTests.randomAuthentication(null, null) : null;
         final QueryBuilder q1 = randomSimpleQuery("name");
-        final SecurityIndexBoolQueryBuilder apiKeyQb1 = SecurityIndexBoolQueryBuilder.wrap(
-            "api_key",
-            q1,
-            fieldNameTranslator,
-            authentication
-        );
+        final UserBoolQueryBuilder apiKeyQb1 = UserBoolQueryBuilder.build("api_key", q1, fieldNameTranslator, authentication);
         assertCommonFilterQueries(apiKeyQb1, authentication);
         final List<QueryBuilder> mustQueries = apiKeyQb1.must();
         assertThat(mustQueries, hasSize(1));
@@ -86,12 +81,7 @@ public class SecurityIndexBoolQueryBuilderTests extends ESTestCase {
         final Authentication authentication = AuthenticationTests.randomAuthentication(null, AuthenticationTests.randomRealmRef(true));
         final QueryBuilder query = randomSimpleQuery("name");
 
-        final SecurityIndexBoolQueryBuilder apiKeysQuery = SecurityIndexBoolQueryBuilder.wrap(
-            "api_key",
-            query,
-            fieldNameTranslator,
-            authentication
-        );
+        final UserBoolQueryBuilder apiKeysQuery = UserBoolQueryBuilder.build("api_key", query, fieldNameTranslator, authentication);
         assertThat(apiKeysQuery.filter().get(0), is(QueryBuilders.termQuery("type", "api_key")));
         assertThat(
             apiKeysQuery.filter().get(1),
@@ -143,12 +133,7 @@ public class SecurityIndexBoolQueryBuilderTests extends ESTestCase {
         if (randomBoolean()) {
             bq1.minimumShouldMatch(randomIntBetween(1, 2));
         }
-        final SecurityIndexBoolQueryBuilder apiKeyQb1 = SecurityIndexBoolQueryBuilder.wrap(
-            "api_key",
-            bq1,
-            fieldNameTranslator,
-            authentication
-        );
+        final UserBoolQueryBuilder apiKeyQb1 = UserBoolQueryBuilder.build("api_key", bq1, fieldNameTranslator, authentication);
         assertCommonFilterQueries(apiKeyQb1, authentication);
 
         assertThat(apiKeyQb1.must(), hasSize(1));
@@ -170,56 +155,31 @@ public class SecurityIndexBoolQueryBuilderTests extends ESTestCase {
         // metadata
         final String metadataKey = randomAlphaOfLengthBetween(3, 8);
         final TermQueryBuilder q1 = QueryBuilders.termQuery("metadata." + metadataKey, randomAlphaOfLengthBetween(3, 8));
-        final SecurityIndexBoolQueryBuilder apiKeyQb1 = SecurityIndexBoolQueryBuilder.wrap(
-            "api_key",
-            q1,
-            fieldNameTranslator,
-            authentication
-        );
+        final UserBoolQueryBuilder apiKeyQb1 = UserBoolQueryBuilder.build("api_key", q1, fieldNameTranslator, authentication);
         assertCommonFilterQueries(apiKeyQb1, authentication);
         assertThat(apiKeyQb1.must().get(0), equalTo(QueryBuilders.termQuery("metadata_flattened." + metadataKey, q1.value())));
 
         // username
         final PrefixQueryBuilder q2 = QueryBuilders.prefixQuery("username", randomAlphaOfLength(3));
-        final SecurityIndexBoolQueryBuilder apiKeyQb2 = SecurityIndexBoolQueryBuilder.wrap(
-            "api_key",
-            q2,
-            fieldNameTranslator,
-            authentication
-        );
+        final UserBoolQueryBuilder apiKeyQb2 = UserBoolQueryBuilder.build("api_key", q2, fieldNameTranslator, authentication);
         assertCommonFilterQueries(apiKeyQb2, authentication);
         assertThat(apiKeyQb2.must().get(0), equalTo(QueryBuilders.prefixQuery("creator.principal", q2.value())));
 
         // realm name
         final WildcardQueryBuilder q3 = QueryBuilders.wildcardQuery("realm_name", "*" + randomAlphaOfLength(3));
-        final SecurityIndexBoolQueryBuilder apiKeyQb3 = SecurityIndexBoolQueryBuilder.wrap(
-            "api_key",
-            q3,
-            fieldNameTranslator,
-            authentication
-        );
+        final UserBoolQueryBuilder apiKeyQb3 = UserBoolQueryBuilder.build("api_key", q3, fieldNameTranslator, authentication);
         assertCommonFilterQueries(apiKeyQb3, authentication);
         assertThat(apiKeyQb3.must().get(0), equalTo(QueryBuilders.wildcardQuery("creator.realm", q3.value())));
 
         // creation_time
         final TermQueryBuilder q4 = QueryBuilders.termQuery("creation", randomLongBetween(0, Long.MAX_VALUE));
-        final SecurityIndexBoolQueryBuilder apiKeyQb4 = SecurityIndexBoolQueryBuilder.wrap(
-            "api_key",
-            q4,
-            fieldNameTranslator,
-            authentication
-        );
+        final UserBoolQueryBuilder apiKeyQb4 = UserBoolQueryBuilder.build("api_key", q4, fieldNameTranslator, authentication);
         assertCommonFilterQueries(apiKeyQb4, authentication);
         assertThat(apiKeyQb4.must().get(0), equalTo(QueryBuilders.termQuery("creation_time", q4.value())));
 
         // expiration_time
         final TermQueryBuilder q5 = QueryBuilders.termQuery("expiration", randomLongBetween(0, Long.MAX_VALUE));
-        final SecurityIndexBoolQueryBuilder apiKeyQb5 = SecurityIndexBoolQueryBuilder.wrap(
-            "api_key",
-            q5,
-            fieldNameTranslator,
-            authentication
-        );
+        final UserBoolQueryBuilder apiKeyQb5 = UserBoolQueryBuilder.build("api_key", q5, fieldNameTranslator, authentication);
         assertCommonFilterQueries(apiKeyQb5, authentication);
         assertThat(apiKeyQb5.must().get(0), equalTo(QueryBuilders.termQuery("expiration_time", q5.value())));
     }
@@ -249,7 +209,7 @@ public class SecurityIndexBoolQueryBuilderTests extends ESTestCase {
         );
         final IllegalArgumentException e1 = expectThrows(
             IllegalArgumentException.class,
-            () -> SecurityIndexBoolQueryBuilder.wrap("api_key", q1, fieldNameTranslator, authentication)
+            () -> UserBoolQueryBuilder.build("api_key", q1, fieldNameTranslator, authentication)
         );
 
         assertThat(e1.getMessage(), containsString("Field [" + fieldName + "] is not allowed"));
@@ -260,7 +220,7 @@ public class SecurityIndexBoolQueryBuilderTests extends ESTestCase {
         final TermsQueryBuilder q1 = QueryBuilders.termsLookupQuery("name", new TermsLookup("lookup", "1", "names"));
         final IllegalArgumentException e1 = expectThrows(
             IllegalArgumentException.class,
-            () -> SecurityIndexBoolQueryBuilder.wrap("api_key", q1, fieldNameTranslator, authentication)
+            () -> UserBoolQueryBuilder.build("api_key", q1, fieldNameTranslator, authentication)
         );
         assertThat(e1.getMessage(), containsString("terms query with terms lookup is not supported"));
     }
@@ -270,7 +230,7 @@ public class SecurityIndexBoolQueryBuilderTests extends ESTestCase {
         final RangeQueryBuilder q1 = QueryBuilders.rangeQuery("creation").relation("contains");
         final IllegalArgumentException e1 = expectThrows(
             IllegalArgumentException.class,
-            () -> SecurityIndexBoolQueryBuilder.wrap("api_key", q1, fieldNameTranslator, authentication)
+            () -> UserBoolQueryBuilder.build("api_key", q1, fieldNameTranslator, authentication)
         );
         assertThat(e1.getMessage(), containsString("range query with relation is not supported"));
     }
@@ -318,13 +278,13 @@ public class SecurityIndexBoolQueryBuilderTests extends ESTestCase {
 
         final IllegalArgumentException e1 = expectThrows(
             IllegalArgumentException.class,
-            () -> SecurityIndexBoolQueryBuilder.wrap("api_key", q1, fieldNameTranslator, authentication)
+            () -> UserBoolQueryBuilder.build("api_key", q1, fieldNameTranslator, authentication)
         );
         assertThat(e1.getMessage(), containsString("Query type [" + q1.getName() + "] is not supported for query"));
     }
 
     public void testWillSetAllowedFields() {
-        final SecurityIndexBoolQueryBuilder apiKeyQb1 = SecurityIndexBoolQueryBuilder.wrap(
+        final UserBoolQueryBuilder apiKeyQb1 = UserBoolQueryBuilder.build(
             "api_key",
             randomSimpleQuery("name"),
             fieldNameTranslator,
@@ -336,7 +296,7 @@ public class SecurityIndexBoolQueryBuilderTests extends ESTestCase {
             final Object[] args = invocationOnMock.getArguments();
             @SuppressWarnings("unchecked")
             final Predicate<String> predicate = (Predicate<String>) args[0];
-            assertTrue(predicate.getClass().getName().startsWith(SecurityIndexBoolQueryBuilder.class.getName()));
+            assertTrue(predicate.getClass().getName().startsWith(UserBoolQueryBuilder.class.getName()));
             testAllowedIndexFieldName(predicate);
             return null;
         }).when(context1).setAllowedFields(any());
@@ -359,7 +319,7 @@ public class SecurityIndexBoolQueryBuilderTests extends ESTestCase {
             new User(randomAlphaOfLengthBetween(5, 8)),
             apiKeyId
         );
-        final SecurityIndexBoolQueryBuilder apiKeyQb = SecurityIndexBoolQueryBuilder.wrap(
+        final UserBoolQueryBuilder apiKeyQb = UserBoolQueryBuilder.build(
             "api_key",
             randomFrom(randomSimpleQuery("name"), null),
             fieldNameTranslator,
@@ -387,7 +347,7 @@ public class SecurityIndexBoolQueryBuilderTests extends ESTestCase {
         assertFalse(predicate.test(disallowedField));
     }
 
-    private void assertCommonFilterQueries(SecurityIndexBoolQueryBuilder qb, Authentication authentication) {
+    private void assertCommonFilterQueries(UserBoolQueryBuilder qb, Authentication authentication) {
         final List<TermQueryBuilder> tqb = qb.filter()
             .stream()
             .filter(q -> q.getClass() == TermQueryBuilder.class)
