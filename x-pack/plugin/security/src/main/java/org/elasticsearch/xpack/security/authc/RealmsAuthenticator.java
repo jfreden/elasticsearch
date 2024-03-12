@@ -55,16 +55,23 @@ public class RealmsAuthenticator implements Authenticator {
     private final AtomicLong numInvalidation;
     private final Cache<String, Realm> lastSuccessfulAuthCache;
     private final SecurityMetrics<Realm> authenticationMetrics;
+    private final AuthenticationEnrichmentService authenticationEnrichmentService;
 
-    public RealmsAuthenticator(AtomicLong numInvalidation, Cache<String, Realm> lastSuccessfulAuthCache, MeterRegistry meterRegistry) {
-        this(numInvalidation, lastSuccessfulAuthCache, meterRegistry, System::nanoTime);
+    public RealmsAuthenticator(
+        AtomicLong numInvalidation,
+        Cache<String, Realm> lastSuccessfulAuthCache,
+        MeterRegistry meterRegistry,
+        AuthenticationEnrichmentService authenticationEnrichmentService
+    ) {
+        this(numInvalidation, lastSuccessfulAuthCache, meterRegistry, System::nanoTime, authenticationEnrichmentService);
     }
 
     RealmsAuthenticator(
         AtomicLong numInvalidation,
         Cache<String, Realm> lastSuccessfulAuthCache,
         MeterRegistry meterRegistry,
-        LongSupplier nanoTimeSupplier
+        LongSupplier nanoTimeSupplier,
+        AuthenticationEnrichmentService authenticationEnrichmentService
     ) {
         this.numInvalidation = numInvalidation;
         this.lastSuccessfulAuthCache = lastSuccessfulAuthCache;
@@ -74,6 +81,7 @@ public class RealmsAuthenticator implements Authenticator {
             this::buildMetricAttributes,
             nanoTimeSupplier
         );
+        this.authenticationEnrichmentService = authenticationEnrichmentService;
     }
 
     @Override
@@ -241,10 +249,20 @@ public class RealmsAuthenticator implements Authenticator {
                     consumeNullUser(context, messages, listener);
                 } else {
                     final AuthenticationResult<User> result = authenticationResultRef.get();
+
                     assert result != null : "authentication result must not be null when user is not null";
                     context.getThreadContext().putTransient(AuthenticationResult.THREAD_CONTEXT_KEY, result);
-                    listener.onResponse(
-                        AuthenticationResult.success(Authentication.newRealmAuthentication(user, authenticatedByRef.get().realmRef()))
+
+                    authenticationEnrichmentService.enrichUser(
+                        user,
+                        ActionListener.wrap(
+                            enrichedUser -> listener.onResponse(
+                                AuthenticationResult.success(
+                                    Authentication.newRealmAuthentication(enrichedUser, authenticatedByRef.get().realmRef())
+                                )
+                            ),
+                            listener::onFailure
+                        )
                     );
                 }
             }, e -> {

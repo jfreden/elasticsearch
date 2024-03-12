@@ -17,6 +17,7 @@ import org.elasticsearch.xpack.core.security.authc.AuthenticationToken;
 import org.elasticsearch.xpack.core.security.authc.Realm;
 import org.elasticsearch.xpack.core.security.authc.jwt.JwtRealmSettings;
 import org.elasticsearch.xpack.core.security.authc.support.BearerToken;
+import org.elasticsearch.xpack.security.authc.AuthenticationEnrichmentService;
 import org.elasticsearch.xpack.security.authc.AuthenticationService;
 import org.elasticsearch.xpack.security.authc.Authenticator;
 import org.elasticsearch.xpack.security.authc.Realms;
@@ -58,7 +59,8 @@ public class JwtTokenExtractionTests extends ESTestCase {
         RealmsAuthenticator realmsAuthenticator = new RealmsAuthenticator(
             mock(AtomicLong.class),
             (Cache<String, Realm>) mock(Cache.class),
-            MeterRegistry.NOOP
+            MeterRegistry.NOOP,
+            mock(AuthenticationEnrichmentService.class)
         );
         final Authenticator.Context context = new Authenticator.Context(
             threadContext,

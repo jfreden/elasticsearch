@@ -25,9 +25,11 @@ import org.apache.http.HttpHost;
 import org.apache.lucene.util.SetOnce;
 import org.elasticsearch.client.Request;
 import org.elasticsearch.client.RequestOptions;
+import org.elasticsearch.client.Response;
 import org.elasticsearch.client.ResponseException;
 import org.elasticsearch.client.RestClient;
 import org.elasticsearch.common.UUIDs;
+import org.elasticsearch.common.bytes.BytesArray;
 import org.elasticsearch.common.settings.SecureString;
 import org.elasticsearch.common.settings.Settings;
 import org.elasticsearch.common.util.concurrent.ThreadContext;
@@ -46,6 +48,7 @@ import org.elasticsearch.test.rest.ESRestTestCase;
 import org.elasticsearch.xcontent.ParseField;
 import org.elasticsearch.xcontent.XContentType;
 import org.elasticsearch.xpack.core.security.authc.support.UsernamePasswordToken;
+import org.elasticsearch.xpack.core.security.authz.RoleDescriptor;
 import org.elasticsearch.xpack.core.security.user.User;
 import org.hamcrest.Matchers;
 import org.junit.BeforeClass;
@@ -93,7 +96,8 @@ public class JwtRestIT extends ESRestTestCase {
 
     @ClassRule
     public static ElasticsearchCluster cluster = ElasticsearchCluster.local()
-        .nodes(2)
+        .nodes(1)
+        // .jvmArg("-agentlib:jdwp=transport=dt_socket,server=n,suspend=y,address=5007")
         .distribution(DistributionType.DEFAULT)
         .keystorePassword(KEYSTORE_PASSWORD)
         .configFile("http.key", Resource.fromClasspath("ssl/http.key"))
@@ -440,6 +444,116 @@ public class JwtRestIT extends ESRestTestCase {
                 () -> client.getRoleDescriptors(new String[] { "*" })
             );
             assertThat(exception.getResponse(), hasStatusCode(RestStatus.FORBIDDEN));
+        } finally {
+            deleteUser(username);
+        }
+    }
+
+    public void testEnrichMetadata() throws Exception {
+        String q =
+            """
+                {
+                    "cluster": [
+                        "all"
+                    ],
+                    "indices": [
+                        {
+                            "names": [
+                                "access-controlled"
+                            ],
+                            "privileges": [
+                                "read"
+                            ],
+                            "query": {
+                                "template": {
+                                    "source" : "{\\"bool\\": { \\"should\\": [ {\\"bool\\": { \\"must_not\\": {\\"exists\\": {\\"field\\": \\"_allow_access_control\\"}} }}, { \\"terms\\": { \\"_allow_access_control\\": {{#toJson}}_user.metadata.access_control{{/toJson}} }}]}}"
+                                }
+                            }
+                        }
+                    ]
+                }""";
+
+        getAdminSecurityClient().putRole(RoleDescriptor.parse("dls-role", new BytesArray(q), false, XContentType.JSON));
+        getAdminSecurityClient().putRoleMapping("dls-mapping", XContentHelper.convertToMap(XContentType.JSON.xContent(), """
+            {
+                "role_templates": [
+                    {"template": {"source": "dls-role"}}
+                ],
+                "enabled": true,
+                "rules": {
+                    "field": {
+                        "username": "*"
+                    }
+                }
+            }
+            """, true));
+        {
+            Request request = new Request("PUT", "access-controlled/_doc/1");
+            request.setJsonEntity("""
+                {
+                    "access": "controlled",
+                    "_allow_access_control": ["sweden"]
+                }""");
+            adminClient().performRequest(request);
+        }
+
+        {
+            Request request = new Request("PUT", "access-controlled/_doc/2");
+            request.setJsonEntity("""
+                {
+                    "access": "controlled",
+                    "_allow_access_control": ["denmark"]
+                }""");
+            adminClient().performRequest(request);
+        }
+
+        final String principal = SERVICE_SUBJECT.get();
+
+        {
+            Request request = new Request("PUT", "/acl-enrichment-test/_doc/2");
+            request.setJsonEntity(String.format("""
+                {
+                    "principal": "%s",
+                    "access_control": ["sweden"]
+                }""", principal));
+            adminClient().performRequest(request);
+        }
+
+        final String username = getUsernameFromPrincipal(principal);
+        final List<String> roles = List.of("dls-role");
+        final String randomMetadata = randomAlphaOfLengthBetween(6, 18);
+        createUser(username, roles, Map.of("test_key", randomMetadata));
+
+        try {
+            final SignedJWT jwt = buildAndSignJwtForRealm2(principal);
+            final TestSecurityClient client = getSecurityClient(jwt, Optional.of(VALID_SHARED_SECRET));
+            Thread.sleep(1000); // WAIT FOR ES TO HAVE ALL THE MAPPINGS
+            final Map<String, Object> response = client.authenticate();
+
+            assertThat(response.get(User.Fields.USERNAME.getPreferredName()), is(username));
+            assertThat(assertMap(response, User.Fields.AUTHENTICATION_REALM), hasEntry(User.Fields.REALM_NAME.getPreferredName(), "jwt2"));
+            assertThat(assertList(response, User.Fields.ROLES), Matchers.containsInAnyOrder(roles.toArray(String[]::new)));
+            assertThat(assertList(response, User.Fields.ROLES), Matchers.contains("dls-role"));
+            assertThat(assertMap(response, User.Fields.METADATA), hasEntry("test_key", randomMetadata));
+            assertThat(assertMap(response, User.Fields.METADATA), hasEntry("access_control", List.of("sweden")));
+
+            {
+                final RequestOptions.Builder options = RequestOptions.DEFAULT.toBuilder();
+                final String bearerHeader = "Bearer " + jwt.serialize();
+                options.addHeader("Authorization", bearerHeader);
+                options.addHeader("ES-Client-Authentication", "SharedSecret " + VALID_SHARED_SECRET);
+
+                {
+                    Request request = new Request("GET", "access-controlled/_doc/1");
+                    request.setOptions(options);
+                    client().performRequest(request);
+                }
+                {
+                    Request request = new Request("GET", "access-controlled/_doc/2");
+                    request.setOptions(options);
+                    assertThrows(Exception.class, () -> client().performRequest(request));
+                }
+            }
         } finally {
             deleteUser(username);
         }

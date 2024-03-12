@@ -15,7 +15,9 @@ import org.elasticsearch.index.IndexNotFoundException;
 import org.elasticsearch.index.query.QueryBuilders;
 import org.elasticsearch.search.builder.SearchSourceBuilder;
 import org.elasticsearch.xpack.core.security.authc.Authentication;
+import org.elasticsearch.xpack.core.security.user.User;
 
+import java.util.HashMap;
 import java.util.Map;
 
 import static org.elasticsearch.xpack.core.ClientHelper.SECURITY_ORIGIN;
@@ -37,7 +39,7 @@ public class AuthenticationEnrichmentService {
             .trackTotalHits(true)
             .query(QueryBuilders.termQuery("principal", authentication.getEffectiveSubject().getUser().principal()));
 
-        final SearchRequest searchRequest = new SearchRequest(new String[] { ".acl-enrichment-test" }, searchSourceBuilder);
+        final SearchRequest searchRequest = new SearchRequest(new String[] { "acl-enrichment-test" }, searchSourceBuilder);
         executeAsyncWithOrigin(client, SECURITY_ORIGIN, TransportSearchAction.TYPE, searchRequest, ActionListener.wrap(searchResponse -> {
             // TODO: Assert on only one hit
             Map<String, Object> source = null;
@@ -59,5 +61,44 @@ public class AuthenticationEnrichmentService {
                 listener.onFailure(exception);
             }
         }));
+    }
+
+    void enrichUser(User user, ActionListener<User> listener) {
+        // TODO: This needs to be configured somehow (name of source index, principal field and so on)
+        // TODO: We can only do this for some realms, add restrictions
+        final SearchSourceBuilder searchSourceBuilder = SearchSourceBuilder.searchSource()
+            .version(false)
+            .fetchSource(true)
+            .trackTotalHits(true)
+            .query(QueryBuilders.termQuery("principal", user.principal()));
+
+        final SearchRequest searchRequest = new SearchRequest(new String[] { "acl-enrichment-test" }, searchSourceBuilder);
+        executeAsyncWithOrigin(client, SECURITY_ORIGIN, TransportSearchAction.TYPE, searchRequest, ActionListener.wrap(searchResponse -> {
+            // TODO: Assert on only one hit
+            Map<String, Object> source = null;
+            if (searchResponse.getHits().getTotalHits().value > 0) {
+                source = searchResponse.getHits().getHits()[0].getSourceAsMap();
+            }
+
+            // TODO: The idea is that there will be one access control index per connector (authz source) so "access_control_{connector_id}"
+            // TODO: Investigate if the naming can cause issues, what happens when overlan with actual metadata keys
+            if (source != null && source.containsKey("access_control")) {
+                listener.onResponse(enrichUserMetadata(source.get("access_control"), user));
+            } else {
+                listener.onResponse(user);
+            }
+        }, exception -> {
+            if (exception instanceof IndexNotFoundException) {
+                listener.onResponse(user);
+            } else {
+                listener.onFailure(exception);
+            }
+        }));
+    }
+
+    public static User enrichUserMetadata(final Object newMetadata, User user) {
+        Map<String, Object> enrichedMetadata = new HashMap<>(user.metadata());
+        enrichedMetadata.put("access_control", newMetadata);
+        return new User(user.principal(), user.roles(), user.fullName(), user.email(), enrichedMetadata, user.enabled());
     }
 }

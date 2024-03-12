@@ -113,7 +113,8 @@ public class RealmsAuthenticatorTests extends AbstractAuthenticatorTests {
             numInvalidation,
             lastSuccessfulAuthCache,
             telemetryPlugin.getTelemetryProvider(Settings.EMPTY).getMeterRegistry(),
-            nanoTimeSupplier
+            nanoTimeSupplier,
+            mock(AuthenticationEnrichmentService.class)
         );
     }
 
