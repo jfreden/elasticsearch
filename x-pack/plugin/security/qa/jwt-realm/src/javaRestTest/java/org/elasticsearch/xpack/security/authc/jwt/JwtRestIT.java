@@ -510,12 +510,11 @@ public class JwtRestIT extends ESRestTestCase {
         final String principal = SERVICE_SUBJECT.get();
 
         {
-            Request request = new Request("PUT", "/acl-enrichment-test/_doc/2");
-            request.setJsonEntity(String.format("""
+            Request request = new Request("PUT", "/acl-enrichment-test/_doc/" + principal);
+            request.setJsonEntity("""
                 {
-                    "principal": "%s",
                     "access_control": ["sweden"]
-                }""", principal));
+                }""");
             adminClient().performRequest(request);
         }
 

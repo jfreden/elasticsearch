@@ -8,6 +8,8 @@
 package org.elasticsearch.xpack.security.authc;
 
 import org.elasticsearch.action.ActionListener;
+import org.elasticsearch.action.get.GetRequest;
+import org.elasticsearch.action.get.TransportGetAction;
 import org.elasticsearch.action.search.SearchRequest;
 import org.elasticsearch.action.search.TransportSearchAction;
 import org.elasticsearch.client.internal.Client;
@@ -66,19 +68,10 @@ public class AuthenticationEnrichmentService {
     void enrichUser(User user, ActionListener<User> listener) {
         // TODO: This needs to be configured somehow (name of source index, principal field and so on)
         // TODO: We can only do this for some realms, add restrictions
-        final SearchSourceBuilder searchSourceBuilder = SearchSourceBuilder.searchSource()
-            .version(false)
-            .fetchSource(true)
-            .trackTotalHits(true)
-            .query(QueryBuilders.termQuery("principal", user.principal()));
-
-        final SearchRequest searchRequest = new SearchRequest(new String[] { "acl-enrichment-test" }, searchSourceBuilder);
-        executeAsyncWithOrigin(client, SECURITY_ORIGIN, TransportSearchAction.TYPE, searchRequest, ActionListener.wrap(searchResponse -> {
+        final GetRequest getRequest = new GetRequest("acl-enrichment-test", user.principal());
+        executeAsyncWithOrigin(client, SECURITY_ORIGIN, TransportGetAction.TYPE, getRequest, ActionListener.wrap(getResponse -> {
             // TODO: Assert on only one hit
-            Map<String, Object> source = null;
-            if (searchResponse.getHits().getTotalHits().value > 0) {
-                source = searchResponse.getHits().getHits()[0].getSourceAsMap();
-            }
+            Map<String, Object> source = getResponse.getSourceAsMap();
 
             // TODO: The idea is that there will be one access control index per connector (authz source) so "access_control_{connector_id}"
             // TODO: Investigate if the naming can cause issues, what happens when overlan with actual metadata keys
