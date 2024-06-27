@@ -213,19 +213,4 @@ public class BulkPutRoleRestIT extends SecurityOnTrialLicenseRestTestCase {
             assertEquals(3, items.size());
         }
     }
-
-    protected Map<String, Object> upsertRoles(String roleDescriptorsByName) throws IOException {
-        Request request = rolesRequest(roleDescriptorsByName);
-        Response response = adminClient().performRequest(request);
-        assertOK(response);
-        return responseAsMap(response);
-    }
-
-    protected Request rolesRequest(String roleDescriptorsByName) {
-        Request rolesRequest;
-        rolesRequest = new Request(HttpPost.METHOD_NAME, "/_security/role");
-        rolesRequest.setJsonEntity(org.elasticsearch.core.Strings.format(roleDescriptorsByName));
-        return rolesRequest;
-    }
-
 }
