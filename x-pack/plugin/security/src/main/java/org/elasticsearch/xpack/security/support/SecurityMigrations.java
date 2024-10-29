@@ -110,16 +110,16 @@ public class SecurityMigrations {
             SearchRequest countRequest = new SearchRequest(indexManager.getConcreteIndexName());
             countRequest.source(searchSourceBuilder);
 
-                client.search(countRequest, ActionListener.wrap(response -> {
-                    // If there are no roles, skip migration
-                    if (response.getHits().getTotalHits().value > 0) {
-                        logger.info("Preparing to migrate [" + response.getHits().getTotalHits().value + "] roles");
-                        updateRolesByQuery(indexManager, client, filterQuery, listener);
-                    } else {
-                        listener.onResponse(null);
-                    }
-                }, listener::onFailure));
-            }
+            client.search(countRequest, ActionListener.wrap(response -> {
+                // If there are no roles, skip migration
+                if (response.getHits().getTotalHits().value > 0) {
+                    logger.info("Preparing to migrate [" + response.getHits().getTotalHits().value + "] roles");
+                    updateRolesByQuery(indexManager, client, filterQuery, listener);
+                } else {
+                    listener.onResponse(null);
+                }
+            }, listener::onFailure));
+        }
 
         private void updateRolesByQuery(
             SecurityIndexManager indexManager,
