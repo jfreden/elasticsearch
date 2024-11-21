@@ -8,6 +8,7 @@ package org.elasticsearch.xpack.security.authc;
 
 import org.elasticsearch.bootstrap.BootstrapCheck;
 import org.elasticsearch.common.Strings;
+import org.elasticsearch.common.settings.ClusterSettings;
 import org.elasticsearch.common.settings.Settings;
 import org.elasticsearch.common.util.set.Sets;
 import org.elasticsearch.core.Nullable;
@@ -25,6 +26,7 @@ import org.elasticsearch.xpack.core.security.authc.kerberos.KerberosRealmSetting
 import org.elasticsearch.xpack.core.security.authc.ldap.LdapRealmSettings;
 import org.elasticsearch.xpack.core.security.authc.oidc.OpenIdConnectRealmSettings;
 import org.elasticsearch.xpack.core.security.authc.pki.PkiRealmSettings;
+import org.elasticsearch.xpack.core.security.authc.saml.MultiProjectSpSamlRealmSettings;
 import org.elasticsearch.xpack.core.security.authc.saml.SingleSpSamlRealmSettings;
 import org.elasticsearch.xpack.core.security.authc.support.UserRoleMapper;
 import org.elasticsearch.xpack.core.ssl.SSLService;
@@ -38,8 +40,9 @@ import org.elasticsearch.xpack.security.authc.kerberos.KerberosRealm;
 import org.elasticsearch.xpack.security.authc.ldap.LdapRealm;
 import org.elasticsearch.xpack.security.authc.oidc.OpenIdConnectRealm;
 import org.elasticsearch.xpack.security.authc.pki.PkiRealm;
-import org.elasticsearch.xpack.security.authc.saml.SamlRealm;
 import org.elasticsearch.xpack.security.authc.saml.SingleSamlSpConfiguration;
+import org.elasticsearch.xpack.security.authc.saml.MultiProjectSamlSpConfiguration;
+import org.elasticsearch.xpack.security.authc.saml.SamlRealm;
 import org.elasticsearch.xpack.security.authc.support.RoleMappingFileBootstrapCheck;
 import org.elasticsearch.xpack.security.support.SecurityIndexManager;
 
@@ -136,7 +139,8 @@ public final class InternalRealms {
         SSLService sslService,
         NativeUsersStore nativeUsersStore,
         UserRoleMapper userRoleMapper,
-        SecurityIndexManager securityIndex
+        SecurityIndexManager securityIndex,
+        ClusterSettings clusterSettings
     ) {
         return Map.of(
             // file realm
@@ -162,6 +166,15 @@ public final class InternalRealms {
                 resourceWatcherService,
                 userRoleMapper,
                 SingleSamlSpConfiguration.create(config)
+            ),
+            // Multi Project SAML realm
+            MultiProjectSpSamlRealmSettings.TYPE,
+            config -> SamlRealm.create(
+                config,
+                sslService,
+                resourceWatcherService,
+                userRoleMapper,
+                MultiProjectSamlSpConfiguration.create(threadPool, config, clusterSettings)
             ),
             // Kerberos realm
             KerberosRealmSettings.TYPE,

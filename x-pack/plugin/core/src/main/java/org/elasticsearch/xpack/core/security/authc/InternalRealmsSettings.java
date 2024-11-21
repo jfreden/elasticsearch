@@ -14,6 +14,7 @@ import org.elasticsearch.xpack.core.security.authc.kerberos.KerberosRealmSetting
 import org.elasticsearch.xpack.core.security.authc.ldap.LdapRealmSettings;
 import org.elasticsearch.xpack.core.security.authc.oidc.OpenIdConnectRealmSettings;
 import org.elasticsearch.xpack.core.security.authc.pki.PkiRealmSettings;
+import org.elasticsearch.xpack.core.security.authc.saml.MultiProjectSpSamlRealmSettings;
 import org.elasticsearch.xpack.core.security.authc.saml.SingleSpSamlRealmSettings;
 
 import java.util.Collections;
@@ -35,6 +36,7 @@ public final class InternalRealmsSettings {
         set.addAll(LdapRealmSettings.getSettings(LdapRealmSettings.LDAP_TYPE));
         set.addAll(PkiRealmSettings.getSettings());
         set.addAll(SingleSpSamlRealmSettings.getSettings());
+        set.addAll(MultiProjectSpSamlRealmSettings.getSettings());
         set.addAll(KerberosRealmSettings.getSettings());
         set.addAll(OpenIdConnectRealmSettings.getSettings());
         set.addAll(JwtRealmSettings.getSettings());

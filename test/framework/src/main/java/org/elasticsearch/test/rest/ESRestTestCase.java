@@ -1481,7 +1481,7 @@ public abstract class ESRestTestCase extends ESTestCase {
         }
         if (System.getProperty("tests.rest.project.id") != null) {
             final var projectId = System.getProperty("tests.rest.project.id");
-            builder.put(ThreadContext.PREFIX + ".X-Elastic-Project-Id", projectId);
+            builder.put("request.headers.X-Elastic-Project-Id", projectId);
         }
         return builder.build();
     }

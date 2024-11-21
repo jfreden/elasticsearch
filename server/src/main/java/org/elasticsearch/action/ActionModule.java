@@ -499,7 +499,8 @@ public class ActionModule extends AbstractModule {
                 new RestHeaderDefinition(Task.X_OPAQUE_ID_HTTP_HEADER, false),
                 new RestHeaderDefinition(Task.TRACE_STATE, false),
                 new RestHeaderDefinition(Task.TRACE_PARENT_HTTP_HEADER, false),
-                new RestHeaderDefinition(Task.X_ELASTIC_PRODUCT_ORIGIN_HTTP_HEADER, false)
+                new RestHeaderDefinition(Task.X_ELASTIC_PRODUCT_ORIGIN_HTTP_HEADER, false),
+                new RestHeaderDefinition("X-Elastic-Project-Id", false)
             )
         ).collect(Collectors.toSet());
         final RestInterceptor restInterceptor = getRestServerComponent(

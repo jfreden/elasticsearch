@@ -867,6 +867,7 @@ public class Security extends Plugin
             resourceWatcherService,
             userRoleMapper
         );
+
         Map<String, Realm.Factory> realmFactories = new HashMap<>(
             InternalRealms.getFactories(
                 threadPool,
@@ -875,7 +876,8 @@ public class Security extends Plugin
                 getSslService(),
                 nativeUsersStore,
                 userRoleMapper,
-                systemIndices.getMainIndexManager()
+                systemIndices.getMainIndexManager(),
+                clusterService.getClusterSettings()
             )
         );
         for (SecurityExtension extension : securityExtensions) {
