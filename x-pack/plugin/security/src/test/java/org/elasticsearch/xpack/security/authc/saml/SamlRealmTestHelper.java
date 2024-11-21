@@ -41,7 +41,7 @@ public class SamlRealmTestHelper {
         slo.setBinding(SAMLConstants.SAML2_REDIRECT_BINDING_URI);
         slo.setLocation(IDP_LOGOUT_URL);
 
-        final SpConfiguration spConfiguration = new SpConfiguration(
+        final SpConfiguration spConfiguration = new SingleSamlSpConfiguration(
             SP_ENTITY_ID,
             SP_ACS_URL,
             SP_LOGOUT_URL,
