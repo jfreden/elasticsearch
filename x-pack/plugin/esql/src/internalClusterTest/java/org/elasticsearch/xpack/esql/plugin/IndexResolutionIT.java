@@ -232,6 +232,41 @@ public class IndexResolutionIT extends AbstractEsqlIntegTestCase {
         }
     }
 
+    public void testDataStreamWithClosedBackingIndex() throws Exception {
+        assertAcked(
+            client().execute(
+                TransportPutComposableIndexTemplateAction.TYPE,
+                new TransportPutComposableIndexTemplateAction.Request("closed-backing-template").indexTemplate(
+                    ComposableIndexTemplate.builder()
+                        .indexPatterns(List.of("closed-backing-*"))
+                        .dataStreamTemplate(new ComposableIndexTemplate.DataStreamTemplate())
+                        .build()
+                )
+            )
+        );
+        assertAcked(
+            client().execute(
+                CreateDataStreamAction.INSTANCE,
+                new CreateDataStreamAction.Request(TEST_REQUEST_TIMEOUT, TEST_REQUEST_TIMEOUT, "closed-backing-ds")
+            )
+        );
+        indexRandom(true, prepareIndex("closed-backing-ds").setOpType(OpType.CREATE).setSource("@timestamp", 1));
+        client().admin().indices().prepareRolloverIndex("closed-backing-ds").get();
+        indexRandom(true, prepareIndex("closed-backing-ds").setOpType(OpType.CREATE).setSource("@timestamp", 2));
+
+        var dataStream = clusterService().state().metadata().getProject().dataStreams().get("closed-backing-ds");
+        String firstBackingIndex = dataStream.getIndices().get(0).getName();
+        ensureGreen(firstBackingIndex);
+        assertAcked(client().admin().indices().prepareClose(firstBackingIndex));
+
+        try (var response = run(syncEsqlQueryRequest("FROM closed-backing-* METADATA _index"))) {
+            assertOk(response);
+        }
+        try (var response = run(syncEsqlQueryRequest("FROM closed-backing-ds METADATA _index"))) {
+            assertOk(response);
+        }
+    }
+
     public void testHiddenIndices() {
         assertAcked(client().admin().indices().prepareCreate("regular-index-1"));
         indexRandom(true, "regular-index-1", 1);

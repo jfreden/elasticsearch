@@ -732,8 +732,17 @@ public class IndexNameExpressionResolver {
     ) {
         if (shouldIncludeRegularIndices(context.getOptions(), selector)) {
             List<Index> indices = indexAbstraction.getIndices();
+            // When wildcards don't expand to closed indices, skip closed backing indices so that the concrete-name
+            // resolution path is consistent with the wildcard expansion path (which applies excludeState=CLOSE).
+            boolean excludeClosed = context.getOptions().expandWildcardsClosed() == false;
             for (int i = 0, n = indices.size(); i < n; i++) {
                 Index index = indices.get(i);
+                if (excludeClosed) {
+                    IndexMetadata imd = context.project.index(index);
+                    if (imd != null && imd.getState() == IndexMetadata.State.CLOSE) {
+                        continue;
+                    }
+                }
                 if (shouldTrackConcreteIndex(context, index)) {
                     concreteIndicesResult.add(index);
                 }

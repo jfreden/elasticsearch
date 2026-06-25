@@ -2137,6 +2137,64 @@ public class EsqlSecurityIT extends ESRestTestCase {
         assertMap(entityAsMap(runESQLCommand("logs_foo_after_2021_alias", "FROM alias-* | STATS COUNT(*)")), oneResult);
     }
 
+    /**
+     * Verifies that a wildcard ES|QL query against a data stream with a closed backing index succeeds when security is enabled.
+     * Without the fix, security resolves the wildcard to a concrete data stream name, and the subsequent field-caps request
+     * includes the closed backing index in its concrete index list, causing a ClusterBlockException.
+     */
+    public void testWildcardFromDataStreamWithClosedBackingIndexSucceeds() throws IOException {
+        String dsName = "closed-security-ds";
+
+        Request putTemplate = new Request("PUT", "/_index_template/closed-security-ds-template");
+        putTemplate.setJsonEntity("""
+            {
+              "index_patterns": ["closed-security-ds-*"],
+              "data_stream": {},
+              "template": {
+                "mappings": {
+                  "properties": {
+                    "@timestamp": { "type": "date" },
+                    "value": { "type": "integer" }
+                  }
+                }
+              }
+            }
+            """);
+        assertOK(client().performRequest(putTemplate));
+
+        assertOK(client().performRequest(new Request("PUT", "/_data_stream/" + dsName)));
+
+        Request doc1 = new Request("POST", "/" + dsName + "/_doc");
+        doc1.setJsonEntity("{\"@timestamp\": \"2024-01-01T00:00:00Z\", \"value\": 1}");
+        assertOK(client().performRequest(doc1));
+        refresh(dsName);
+
+        assertOK(client().performRequest(new Request("POST", "/" + dsName + "/_rollover")));
+
+        Request doc2 = new Request("POST", "/" + dsName + "/_doc");
+        doc2.setJsonEntity("{\"@timestamp\": \"2024-01-02T00:00:00Z\", \"value\": 2}");
+        assertOK(client().performRequest(doc2));
+        refresh(dsName);
+
+        @SuppressWarnings("unchecked")
+        Map<String, Object> dsInfo = entityAsMap(client().performRequest(new Request("GET", "/_data_stream/" + dsName)));
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> dataStreams = (List<Map<String, Object>>) dsInfo.get("data_streams");
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> backingIndices = (List<Map<String, Object>>) dataStreams.get(0).get("indices");
+        String firstBackingIndex = (String) backingIndices.get(0).get("index_name");
+
+        Request healthReq = new Request("GET", "/_cluster/health/" + firstBackingIndex);
+        healthReq.addParameter("wait_for_status", "green");
+        healthReq.addParameter("timeout", "30s");
+        assertOK(client().performRequest(healthReq));
+
+        assertOK(client().performRequest(new Request("POST", "/" + firstBackingIndex + "/_close")));
+
+        assertOK(runESQLCommand("test-admin", "FROM closed-security-ds-* | LIMIT 10"));
+        assertOK(runESQLCommand("test-admin", "FROM closed-security-ds | LIMIT 10"));
+    }
+
     protected Response runESQLCommand(String user, String command) throws IOException {
         if (command.toLowerCase(Locale.ROOT).contains("limit") == false) {
             // add a (high) limit to avoid warnings on default limit
