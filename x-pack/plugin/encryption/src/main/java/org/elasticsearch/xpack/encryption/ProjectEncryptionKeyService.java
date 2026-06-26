@@ -17,7 +17,6 @@ import org.elasticsearch.cluster.project.ProjectResolver;
 import org.elasticsearch.cluster.service.ClusterService;
 import org.elasticsearch.common.settings.SecureString;
 import org.elasticsearch.common.settings.Settings;
-import org.elasticsearch.common.util.FeatureFlag;
 import org.elasticsearch.core.Nullable;
 import org.elasticsearch.features.NodeFeature;
 import org.elasticsearch.gateway.GatewayService;
@@ -49,8 +48,6 @@ import javax.crypto.spec.SecretKeySpec;
 class ProjectEncryptionKeyService implements AesGcmEncryptionService.KeyProvider, Closeable {
 
     private static final Logger logger = LogManager.getLogger(ProjectEncryptionKeyService.class);
-
-    static final FeatureFlag PROJECT_ENCRYPTION_KEY_FEATURE_FLAG = new FeatureFlag("project_encryption_key");
 
     // Prevents key generation in a mixed-version cluster. Without this, TransportVersion filtering
     // would omit the PEK custom from cluster state sent to old nodes (they lack the transport version
